@@ -5,6 +5,7 @@ import {
   Disposable,
   Event,
   EventEmitter,
+  FileRenameEvent,
   ProgressLocation,
   scm,
   SecretStorage,
@@ -54,6 +55,7 @@ import {
 } from "./util";
 import { match, matchAll } from "./util/globMatch";
 import { RepositoryFilesWatcher } from "./watchers/repositoryFilesWatcher";
+import { rename as fsRename } from "fs";
 
 function shouldShowProgress(operation: Operation): boolean {
   switch (operation) {
@@ -264,6 +266,12 @@ export class Repository implements IRemoteRepository {
       this.disposables
     );
 
+    this._fsWatcher.onDidRename(
+      renameEvent => this.performRename(renameEvent),
+      this,
+      this.disposables
+    );
+
     // Only check deleted files after the status list is fully updated
     this.onDidChangeStatus(this.actionForDeletedFiles, this, this.disposables);
 
@@ -291,6 +299,50 @@ export class Repository implements IRemoteRepository {
         this.onDidSaveTextDocument(document);
       })
     );
+  }
+
+  private async performRename(event: FileRenameEvent) {
+    // TODO: What happens when moving e.g. folders? Is the event triggered?
+    //  workspace.onDidRenameFiles(event => {
+    event.files
+      .filter(
+        // TODO: also filter when source is not under version control
+        // TODO: also filter when target is in svn:ignore
+        //file => !isTmp(file.oldUri) && !isTmp(file.newUri)
+        _file => true
+      )
+      .forEach(file => {
+        // TODO: Handle errors
+        fsRename(file.newUri.fsPath, file.oldUri.fsPath, () => {
+          console.log("after rename");
+        });
+
+        this.rename(
+          file.oldUri.fsPath.toString(),
+          file.newUri.fsPath.toString()
+        );
+
+        // TODO: mv file from target to source
+        // TODO: svn mv file from source to target
+        // TODO: does this work for nested folders
+        // TODO: order of files in folders?
+        console.log(file);
+      });
+    console.log("Caught onWillRenameFiles!");
+    console.log(JSON.stringify(event.files));
+
+    // Possible solutions:
+    // a) prevent rename from VSCode (probably difficult)
+    // b) undo rename from VSCode and perform rename by svn
+
+    // TODO: move file/folder not under version control
+    // TODO: move single file
+    // TODO: move single folder
+    // TODO: move multiple files
+    // TODO: move multiple folders (?)
+
+    // TODO: move file/folder to something matching svn:ignore -- probably svn rm
+    //  });
   }
 
   @debounce(1000)

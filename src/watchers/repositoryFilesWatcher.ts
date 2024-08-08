@@ -1,4 +1,11 @@
-import { Event, Uri, workspace, EventEmitter, RelativePattern } from "vscode";
+import {
+  Event,
+  Uri,
+  workspace,
+  EventEmitter,
+  RelativePattern,
+  FileRenameEvent
+} from "vscode";
 import { watch } from "fs";
 import { exists } from "../fs";
 import { join } from "path";
@@ -23,6 +30,7 @@ export class RepositoryFilesWatcher implements IDisposable {
   public onDidCreate: Event<Uri>;
   public onDidDelete: Event<Uri>;
   public onDidAny: Event<Uri>;
+  public onDidRename: Event<FileRenameEvent>;
 
   public onDidWorkspaceChange: Event<Uri>;
   public onDidWorkspaceCreate: Event<Uri>;
@@ -75,6 +83,9 @@ export class RepositoryFilesWatcher implements IDisposable {
     this.onDidCreate = filterEvent(fsWatcher.onDidCreate, isRelevant);
     this.onDidDelete = filterEvent(fsWatcher.onDidDelete, isRelevant);
 
+    // TODO: ignoreSvn? Needed when files inside .svn are renamed
+    this.onDidRename = workspace.onDidRenameFiles;
+
     this.onDidAny = anyEvent(
       this.onDidChange,
       this.onDidCreate,
@@ -119,6 +130,7 @@ export class RepositoryFilesWatcher implements IDisposable {
     if (event === "change") {
       this._onRepoChange.fire(Uri.parse(filename));
     } else if (event === "rename") {
+      // TODO: this needs to be changed, probably
       exists(filename).then(doesExist => {
         if (doesExist) {
           this._onRepoCreate.fire(Uri.parse(filename));
