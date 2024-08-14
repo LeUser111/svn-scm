@@ -302,47 +302,32 @@ export class Repository implements IRemoteRepository {
   }
 
   private async performRename(event: FileRenameEvent) {
-    // TODO: What happens when moving e.g. folders? Is the event triggered?
-    //  workspace.onDidRenameFiles(event => {
     event.files
       .filter(
         // TODO: also filter when source is not under version control
+        // TODO: also filter when target is not under version control (or use option for automatically adding target or prompting)
         // TODO: also filter when target is in svn:ignore
+        // TODO: also exact target in version control (file becomes missing, message: not a directory)
         //file => !isTmp(file.oldUri) && !isTmp(file.newUri)
         _file => true
       )
       .forEach(file => {
         // TODO: Handle errors
         fsRename(file.newUri.fsPath, file.oldUri.fsPath, () => {
-          console.log("after rename");
+          /* Do nothing */
         });
 
+        // TODO: svn: E155040: Cannot move mixed-revision subtree '/home/wiedenmann/Downloads/svn-test/test/nested-folder/folder-b' [67986:67987]; try updating it
         this.rename(
           file.oldUri.fsPath.toString(),
           file.newUri.fsPath.toString()
         );
 
-        // TODO: mv file from target to source
-        // TODO: svn mv file from source to target
-        // TODO: does this work for nested folders
-        // TODO: order of files in folders?
         console.log(file);
       });
-    console.log("Caught onWillRenameFiles!");
-    console.log(JSON.stringify(event.files));
-
-    // Possible solutions:
-    // a) prevent rename from VSCode (probably difficult)
-    // b) undo rename from VSCode and perform rename by svn
 
     // TODO: move file/folder not under version control
-    // TODO: move single file
-    // TODO: move single folder
-    // TODO: move multiple files
-    // TODO: move multiple folders (?)
-
     // TODO: move file/folder to something matching svn:ignore -- probably svn rm
-    //  });
   }
 
   @debounce(1000)
