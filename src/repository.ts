@@ -305,15 +305,26 @@ export class Repository implements IRemoteRepository {
   }
 
   private async performRename(event: FileRenameEvent) {
+    const svnStatuses = await this.repository.getStatus({ includeIgnored: true, includeExternals: true, checkRemoteChanges: false});
+    const findStatus = (fileUri: Uri) => svnStatuses.find(iFile => path.join(this.workspaceRoot, iFile.path) === fileUri.fsPath );
+
     const promises = event.files
-      .filter(
-        // TODO: also filter when source is not under version control
+      .filter(file => {
+        const statusOldFile = findStatus(file.oldUri);
+        const statusNewFile = findStatus(file.newUri);
+        
+        const willContinue = statusOldFile?.status === "missing" && statusNewFile?.status === "unversioned";
+
+        console.log(`Will continue with rename: ${willContinue}`);
+        
+        console.log(statusOldFile);
+        console.log(statusNewFile);
+
+        return willContinue;
+
         // TODO: also filter when target is not under version control (or use option for automatically adding target or prompting)
-        // TODO: also filter when target is in svn:ignore
-        // TODO: also exact target in version control (file becomes missing, message: not a directory)
-        //file => !isTmp(file.oldUri) && !isTmp(file.newUri)
-        _file => true
-      )
+        // TODO: file => !isTmp(file.oldUri) && !isTmp(file.newUri) <-- is this needed? Just an optimization? How to test that?
+      })
       .map(async file => this.renameSingleFile(file));
 
     // The result of the individual renames are not important, logging and potential rollback have already been handled.
@@ -328,8 +339,6 @@ export class Repository implements IRemoteRepository {
       return Promise.reject(undoError);
     }
 
-    // TODO: move file/folder not under version control
-    // TODO: move file/folder to something matching svn:ignore -- probably svn rm
     // TODO: svn: E155040: Cannot move mixed-revision subtree '/home/wiedenmann/Downloads/svn-test/test/nested-folder/folder-b' [67986:67987]; try updating it
     return this.rename(
       file.oldUri.fsPath.toString(),
