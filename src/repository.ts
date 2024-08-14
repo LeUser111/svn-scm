@@ -313,22 +313,16 @@ export class Repository implements IRemoteRepository {
         const statusOldFile = findStatus(file.oldUri);
         const statusNewFile = findStatus(file.newUri);
         
-        const willContinue = statusOldFile?.status === "missing" && statusNewFile?.status === "unversioned";
-
-        console.log(`Will continue with rename: ${willContinue}`);
-        
-        console.log(statusOldFile);
-        console.log(statusNewFile);
-
-        return willContinue;
-
+        const isRenameRelevantForSvn = statusOldFile?.status === "missing" && statusNewFile?.status === "unversioned";
+        return isRenameRelevantForSvn;
         // TODO: also filter when target is not under version control (or use option for automatically adding target or prompting)
+          // may be able to use utils.ts#isDescendant
         // TODO: file => !isTmp(file.oldUri) && !isTmp(file.newUri) <-- is this needed? Just an optimization? How to test that?
       })
       .map(async file => this.renameSingleFile(file));
 
     // The result of the individual renames are not important, logging and potential rollback have already been handled.
-    await Promise.all(promises).catch(_ => Promise.resolve([]));
+    await Promise.all(promises).catch(_ => []);
   }
 
   private async renameSingleFile(file: { oldUri: Uri; newUri: Uri }): Promise<string> {
@@ -381,6 +375,7 @@ export class Repository implements IRemoteRepository {
   private logSvnError(error: any, message: string) {
     // TODO: log to SVN extension output or popup box
     if (error instanceof SvnError) {
+      window.showErrorMessage(message);
       console.log(`${message}\n\t${error.message?.trimEnd()}\n\t${error.stderr?.trimEnd()}`);
     } else {
       this.logError(error, message);
@@ -389,6 +384,7 @@ export class Repository implements IRemoteRepository {
 
   private logError(error: any, message: string) {
     // TODO: log to SVN extension output or popup box
+    window.showErrorMessage(message);
     console.log(`${message}\n\t${error}`);
   }
 
