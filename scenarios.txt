@@ -1,0 +1,30 @@
+rename file (under version control) to file
+move file (under version control) into folder (under version control)
+rename folder (under version control) to folder
+
+move multiple files (under version control) into folder (under version control)
+move folder with children (under version control) into folder (under version control)
+move multiple folders with children (under version control) into folder (under version control)
+
+refactor/rename class (under version control) in Java
+refactor/move class (under version control) in Java
+refactor/rename package (under version control) in Java
+
+file to file <- nothing to do, source not under version control
+folder to folder <- nothing to do, source not under version control
+file (under version control) to file (under version control)
+file (under version control) to file (ignored)
+
+
+NOT Working yet:
+
+move with mixed revision (how does that even happen?)
+
+move to something that is deleted (should remove deletion?)
+
+move into ignored folder (sends deletion prompt, should delete directly, instead?) <-- already possible via setting - do nothing?
+
+
+TODO:
+
+commits across multiple projects (e.g. in diff explorer)
