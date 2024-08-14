@@ -1,3 +1,5 @@
+/* eslint-disable prettier/prettier */
+/* eslint-disable @typescript-eslint/no-empty-function */
 import * as path from "path";
 import { clearInterval, setInterval } from "timers";
 import {
@@ -55,7 +57,8 @@ import {
 } from "./util";
 import { match, matchAll } from "./util/globMatch";
 import { RepositoryFilesWatcher } from "./watchers/repositoryFilesWatcher";
-import { rename as fsRename } from "fs";
+import { renameSync as fsRenameSync } from "fs";
+import SvnError from "./svnError";
 
 function shouldShowProgress(operation: Operation): boolean {
   switch (operation) {
@@ -302,7 +305,7 @@ export class Repository implements IRemoteRepository {
   }
 
   private async performRename(event: FileRenameEvent) {
-    event.files
+    const promises = event.files
       .filter(
         // TODO: also filter when source is not under version control
         // TODO: also filter when target is not under version control (or use option for automatically adding target or prompting)
@@ -311,23 +314,73 @@ export class Repository implements IRemoteRepository {
         //file => !isTmp(file.oldUri) && !isTmp(file.newUri)
         _file => true
       )
-      .forEach(file => {
-        // TODO: Handle errors
-        fsRename(file.newUri.fsPath, file.oldUri.fsPath, () => {
-          /* Do nothing */
-        });
+      .map(async file => this.renameSingleFile(file));
 
-        // TODO: svn: E155040: Cannot move mixed-revision subtree '/home/wiedenmann/Downloads/svn-test/test/nested-folder/folder-b' [67986:67987]; try updating it
-        this.rename(
-          file.oldUri.fsPath.toString(),
-          file.newUri.fsPath.toString()
-        );
+    // The result of the individual renames are not important, logging and potential rollback have already been handled.
+    await Promise.all(promises).catch(_ => Promise.resolve([]));
+  }
 
-        console.log(file);
-      });
+  private async renameSingleFile(file: { oldUri: Uri; newUri: Uri }): Promise<string> {
+    // Prepare the svn rename/move by undoing the VSCode rename/move
+    const undoError = this.nonSvnRename(file.newUri, file.oldUri);
+    if (undoError) {
+      this.logError(undoError, "Failed to undo VSCode move - cannot proceed with SVN move!");
+      return Promise.reject(undoError);
+    }
 
     // TODO: move file/folder not under version control
     // TODO: move file/folder to something matching svn:ignore -- probably svn rm
+    // TODO: svn: E155040: Cannot move mixed-revision subtree '/home/wiedenmann/Downloads/svn-test/test/nested-folder/folder-b' [67986:67987]; try updating it
+    return this.rename(
+      file.oldUri.fsPath.toString(),
+      file.newUri.fsPath.toString()
+    ).then(
+      s => s,
+      error => {
+        this.logSvnError(error, "Failed to perform SVN move - restoring VSCode move!");
+
+        // Redo VSCode rename/move since SVN move has failed
+        const redoError = this.nonSvnRename(file.oldUri, file.newUri);
+        if (redoError) {
+          this.logError(redoError, "Failed to redo VSCode move!");
+        }
+
+        return error;
+      }
+    );
+  }
+
+  /**
+   * Rename or move a file or folder on the file system.
+   * @param source the source file or folder
+   * @param target the target file or folder
+   * @returns undefined on success, else the received error object
+   */
+  private nonSvnRename(source: Uri, target: Uri): any | undefined {
+    try {
+      fsRenameSync(source.fsPath, target.fsPath);
+    } catch (error) {
+      return error;
+    }
+  }
+
+  /**
+   * Pretty prints the SVN error if possible, else prints the error as it is.
+   * @param error the error caught from an SVN operation
+   * @param message a message to be printed before the error
+   */
+  private logSvnError(error: any, message: string) {
+    // TODO: log to SVN extension output or popup box
+    if (error instanceof SvnError) {
+      console.log(`${message}\n\t${error.message?.trimEnd()}\n\t${error.stderr?.trimEnd()}`);
+    } else {
+      this.logError(error, message);
+    }
+  }
+
+  private logError(error: any, message: string) {
+    // TODO: log to SVN extension output or popup box
+    console.log(`${message}\n\t${error}`);
   }
 
   @debounce(1000)
