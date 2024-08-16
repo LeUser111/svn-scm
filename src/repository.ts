@@ -308,16 +308,23 @@ export class Repository implements IRemoteRepository {
     const svnStatuses = await this.repository.getStatus({ includeIgnored: true, includeExternals: true, checkRemoteChanges: false});
     const findStatus = (fileUri: Uri) => svnStatuses.find(iFile => path.join(this.workspaceRoot, iFile.path) === fileUri.fsPath );
 
+    const svnPattern = /[\\\/](\.svn|_svn)[\\\/]/;
+    const isInSvnDirectory = (uri: Uri) => svnPattern.test(uri.path);
+
     const promises = event.files
       .filter(file => {
+        // We don't have to verify the oldUri - .svn is never under version control and therefore statusOldFile won't be "missing"
+        if ( isInSvnDirectory(file.newUri)) {
+          return false;
+        }
+
         const statusOldFile = findStatus(file.oldUri);
         const statusNewFile = findStatus(file.newUri);
-        
+
         const isRenameRelevantForSvn = statusOldFile?.status === "missing" && statusNewFile?.status === "unversioned";
         return isRenameRelevantForSvn;
         // TODO: also filter when target is not under version control (or use option for automatically adding target or prompting)
-          // may be able to use utils.ts#isDescendant
-        // TODO: file => !isTmp(file.oldUri) && !isTmp(file.newUri) <-- is this needed? Just an optimization? How to test that?
+          // may be able to use utils.ts#isDescendant      
       })
       .map(async file => this.renameSingleFile(file));
 
