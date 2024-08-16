@@ -308,7 +308,7 @@ export class Repository implements IRemoteRepository {
     for (const file of event.files) {
       try {
         const canBeRenamed = await this._canFileBeRenamed(file);
-        if(canBeRenamed) {
+        if (canBeRenamed) {
           await this._renameSingleFile(file);
         }
       } catch (error) {
@@ -321,7 +321,7 @@ export class Repository implements IRemoteRepository {
     const svnPattern = /[\\\/](\.svn|_svn)[\\\/]/;
     const isInSvnDirectory = (uri: Uri) => svnPattern.test(uri.path);
     // We don't have to verify the oldUri - .svn is never under version control and therefore statusOldFile won't be "missing"
-    if ( isInSvnDirectory(file.newUri)) {
+    if (isInSvnDirectory(file.newUri)) {
       return false;
     }
 
@@ -331,6 +331,8 @@ export class Repository implements IRemoteRepository {
      */
     const svnStatuses = await this.repository.getStatus({includeIgnored: true, includeExternals: true, checkRemoteChanges: false});
     const findStatus = (fileUri: Uri) => svnStatuses.find(iFile => path.join(this.workspaceRoot, iFile.path) === fileUri.fsPath );
+    const findRelativeStatus = (relativePath: string) => svnStatuses.find(iFile => iFile.path === relativePath);
+
     const statusOldFile = findStatus(file.oldUri);
     const statusNewFile = findStatus(file.newUri);
 
@@ -349,7 +351,7 @@ export class Repository implements IRemoteRepository {
       return false;
     }
 
-    // TODO: currently adds ignored folders - must verify missing folders to see if any are ignored
+    // TODO: also needs to handle const ignoreList = configuration.get<string[]>("sourceControl.ignore");
 
     const relativePath = file.newUri.path.replace(this.workspaceRoot + "/", "");
     const relativePathElements = relativePath.split("/");
@@ -358,6 +360,16 @@ export class Repository implements IRemoteRepository {
 
     if (missingFolders.length === 0) {
       // This shouldn't happen in practice, but who knows...
+      return false;
+    }
+
+    const subPaths = missingFolders.reduce(
+      (subs, next) => subs.length === 0 ? [next] : [...subs, subs.slice(-1) + "/" + next],
+      [] as string[]
+    );
+
+    if (subPaths.some(subPath => findRelativeStatus(subPath)?.status === "ignored")) {
+      // Moving into ignored folder - nothing to do.
       return false;
     }
 
