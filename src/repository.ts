@@ -1,4 +1,3 @@
-/* eslint-disable prettier/prettier */
 /* eslint-disable @typescript-eslint/no-empty-function */
 import * as path from "path";
 import { clearInterval, setInterval } from "timers";
@@ -305,38 +304,86 @@ export class Repository implements IRemoteRepository {
   }
 
   private async performRename(event: FileRenameEvent) {
-    const svnStatuses = await this.repository.getStatus({ includeIgnored: true, includeExternals: true, checkRemoteChanges: false});
-    const findStatus = (fileUri: Uri) => svnStatuses.find(iFile => path.join(this.workspaceRoot, iFile.path) === fileUri.fsPath );
-
-    const svnPattern = /[\\\/](\.svn|_svn)[\\\/]/;
-    const isInSvnDirectory = (uri: Uri) => svnPattern.test(uri.path);
-
-    const promises = event.files
-      .filter(file => {
-        // We don't have to verify the oldUri - .svn is never under version control and therefore statusOldFile won't be "missing"
-        if ( isInSvnDirectory(file.newUri)) {
-          return false;
+    // Array.filter does not work with async functions, using work-around
+    for (const file of event.files) {
+      try {
+        const canBeRenamed = await this._canFileBeRenamed(file);
+        if(canBeRenamed) {
+          await this._renameSingleFile(file);
         }
-
-        const statusOldFile = findStatus(file.oldUri);
-        const statusNewFile = findStatus(file.newUri);
-
-        const isRenameRelevantForSvn = statusOldFile?.status === "missing" && statusNewFile?.status === "unversioned";
-        return isRenameRelevantForSvn;
-        // TODO: also filter when target is not under version control (or use option for automatically adding target or prompting)
-          // may be able to use utils.ts#isDescendant      
-      })
-      .map(async file => this.renameSingleFile(file));
-
-    // The result of the individual renames are not important, logging and potential rollback have already been handled.
-    await Promise.all(promises).catch(_ => []);
+      } catch (error) {
+        // The result of the individual renames are not important, logging and potential rollback have already been handled.
+      }
+    }
   }
 
-  private async renameSingleFile(file: { oldUri: Uri; newUri: Uri }): Promise<string> {
+  private async _canFileBeRenamed(file: {oldUri: Uri; newUri: Uri}): Promise<boolean> {
+    const svnPattern = /[\\\/](\.svn|_svn)[\\\/]/;
+    const isInSvnDirectory = (uri: Uri) => svnPattern.test(uri.path);
+    // We don't have to verify the oldUri - .svn is never under version control and therefore statusOldFile won't be "missing"
+    if ( isInSvnDirectory(file.newUri)) {
+      return false;
+    }
+
+    /*
+     * The status of the repository has to be refreshed for each filter operation because otherwise moving multiple files/folders
+     * to an unversioned target folder fails.
+     */
+    const svnStatuses = await this.repository.getStatus({includeIgnored: true, includeExternals: true, checkRemoteChanges: false});
+    const findStatus = (fileUri: Uri) => svnStatuses.find(iFile => path.join(this.workspaceRoot, iFile.path) === fileUri.fsPath );
+    const statusOldFile = findStatus(file.oldUri);
+    const statusNewFile = findStatus(file.newUri);
+
+    if (statusOldFile?.status !== "missing") {
+      // Old file isn't under version control
+      return false;
+    }
+
+    if (statusNewFile?.status === "unversioned") {
+      // New file is a valid target, rename can take place right away
+      return true;
+    }
+
+    if (!file.newUri.path.startsWith(this.workspaceRoot)) {
+      // The target lies outside of our svn root - we can't add the folder
+      return false;
+    }
+
+    // TODO: currently adds ignored folders - must verify missing folders to see if any are ignored
+
+    const relativePath = file.newUri.path.replace(this.workspaceRoot + "/", "");
+    const relativePathElements = relativePath.split("/");
+    // The last element is the one we want to move, we don't need to add it
+    const missingFolders = relativePathElements.slice(0, -1);
+
+    if (missingFolders.length === 0) {
+      // This shouldn't happen in practice, but who knows...
+      return false;
+    }
+
+    // TODO: extract separate function - canFolderBeAdded
+    try {
+      const relativePathToAdd = missingFolders.join("/");
+      const absolutePathToAdd = path.join(this.workspaceRoot, relativePathToAdd);
+      const uriToAdd = Uri.file(absolutePathToAdd);
+      await this.addFiles([uriToAdd.fsPath], ["--parents", "--depth=empty"]);
+
+      return true;
+    } catch (error) {
+      const sourceRelativePath = file.oldUri.path.replace(this.workspaceRoot + "/", "");
+      this._logSvnError(error, `Failed to add intermediate folders - skipping rename/move of ${sourceRelativePath}`);
+      return false;
+    }
+
+    // TODO: check configuration for auto-add (all, just-one, none, prompt)
+    // TODO: add intermediate folders with depth=empty for just-one, simple add for all, return false for none
+  }
+
+  private async _renameSingleFile(file: {oldUri: Uri; newUri: Uri}): Promise<string> {
     // Prepare the svn rename/move by undoing the VSCode rename/move
-    const undoError = this.nonSvnRename(file.newUri, file.oldUri);
+    const undoError = this._nonSvnRename(file.newUri, file.oldUri);
     if (undoError) {
-      this.logError(undoError, "Failed to undo VSCode move - cannot proceed with SVN move!");
+      this._logError(undoError, "Failed to undo VSCode move - cannot proceed with SVN move!");
       return Promise.reject(undoError);
     }
 
@@ -347,12 +394,12 @@ export class Repository implements IRemoteRepository {
     ).then(
       s => s,
       error => {
-        this.logSvnError(error, "Failed to perform SVN move - restoring VSCode move!");
+        this._logSvnError(error, "Failed to perform SVN move - restoring VSCode move!");
 
         // Redo VSCode rename/move since SVN move has failed
-        const redoError = this.nonSvnRename(file.oldUri, file.newUri);
+        const redoError = this._nonSvnRename(file.oldUri, file.newUri);
         if (redoError) {
-          this.logError(redoError, "Failed to redo VSCode move!");
+          this._logError(redoError, "Failed to redo VSCode move!");
         }
 
         return error;
@@ -366,7 +413,7 @@ export class Repository implements IRemoteRepository {
    * @param target the target file or folder
    * @returns undefined on success, else the received error object
    */
-  private nonSvnRename(source: Uri, target: Uri): any | undefined {
+  private _nonSvnRename(source: Uri, target: Uri): any | undefined {
     try {
       fsRenameSync(source.fsPath, target.fsPath);
     } catch (error) {
@@ -379,17 +426,17 @@ export class Repository implements IRemoteRepository {
    * @param error the error caught from an SVN operation
    * @param message a message to be printed before the error
    */
-  private logSvnError(error: any, message: string) {
+  private _logSvnError(error: any, message: string) {
     // TODO: log to SVN extension output or popup box
     if (error instanceof SvnError) {
       window.showErrorMessage(message);
       console.log(`${message}\n\t${error.message?.trimEnd()}\n\t${error.stderr?.trimEnd()}`);
     } else {
-      this.logError(error, message);
+      this._logError(error, message);
     }
   }
 
-  private logError(error: any, message: string) {
+  private _logError(error: any, message: string) {
     // TODO: log to SVN extension output or popup box
     window.showErrorMessage(message);
     console.log(`${message}\n\t${error}`);
@@ -883,8 +930,8 @@ export class Repository implements IRemoteRepository {
     });
   }
 
-  public async addFiles(files: string[]) {
-    return this.run(Operation.Add, () => this.repository.addFiles(files));
+  public async addFiles(files: string[], options: string[] = []) {
+    return this.run(Operation.Add, () => this.repository.addFiles(files, options));
   }
 
   public async addChangelist(files: string[], changelist: string) {

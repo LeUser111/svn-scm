@@ -508,13 +508,13 @@ export class Repository {
     return this.exec(["add", "--depth=empty", ...files]);
   }
 
-  public addFiles(files: string[]) {
+  public addFiles(files: string[], options: string[] = []) {
     const ignoreList = configuration.get<string[]>("sourceControl.ignore");
     if (ignoreList.length > 0) {
       return this.addFilesByIgnore(files, ignoreList);
     }
     files = files.map(file => this.removeAbsolutePath(file));
-    return this.exec(["add", ...files]);
+    return this.exec(["add", ...options, ...files]);
   }
 
   public addChangelist(files: string[], changelist: string) {
