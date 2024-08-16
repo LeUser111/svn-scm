@@ -1,30 +1,35 @@
-rename file (under version control) to file
-move file (under version control) into folder (under version control)
-rename folder (under version control) to folder
+Working:
 
-move multiple files (under version control) into folder (under version control)
-move folder with children (under version control) into folder (under version control)
-move multiple folders with children (under version control) into folder (under version control)
+    rename file (under version control) to file
+    move file (under version control) into folder (under version control)
+    rename folder (under version control) to folder
 
-refactor/rename class (under version control) in Java
-refactor/move class (under version control) in Java
-refactor/rename package (under version control) in Java
+    move multiple files (under version control) into folder (under version control)
+    move folder with children (under version control) into folder (under version control)
+    move multiple folders with children (under version control) into folder (under version control)
 
-file to file <- nothing to do, source not under version control
-folder to folder <- nothing to do, source not under version control
-file (under version control) to file (under version control)
-file (under version control) to file (ignored)
+    refactor/rename class (under version control) in Java
+    refactor/move class (under version control) in Java
+    refactor/rename package (under version control) in Java
+
+    file to file <- nothing to do, source not under version control
+    folder to folder <- nothing to do, source not under version control
+    file (under version control) to file (under version control)
+    file (under version control) to file (ignored)
+
+    move file(s) (under version control) into (nested) folder (not under version control) <-- folder is added without its other content
+    move folder(s) (under version control) into (nested) folder (not under version control) <-- folder is added without its other content
+
+    move file(s)/folder(s) into ignored folder or subfolder of ignored folder <-- sends deletion prompt, can be configured to auto-remove
 
 
 NOT Working yet:
 
-move with mixed revision (how does that even happen?)
+    move with mixed revision (how does that even happen?)
 
-move to something that is deleted (should remove deletion?)
-
-move into ignored folder (sends deletion prompt, should delete directly, instead?) <-- already possible via setting - do nothing?
+    move to something that is deleted (should remove deletion?)
 
 
 TODO:
 
-commits across multiple projects (e.g. in diff explorer)
+    commits across multiple projects (e.g. in diff explorer)

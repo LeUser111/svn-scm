@@ -351,8 +351,6 @@ export class Repository implements IRemoteRepository {
       return false;
     }
 
-    // TODO: also needs to handle const ignoreList = configuration.get<string[]>("sourceControl.ignore");
-
     const relativePath = file.newUri.path.replace(this.workspaceRoot + "/", "");
     const relativePathElements = relativePath.split("/");
     // The last element is the one we want to move, we don't need to add it
@@ -368,14 +366,21 @@ export class Repository implements IRemoteRepository {
       [] as string[]
     );
 
+    // TODO: also needs to handle const ignoreList = configuration.get<string[]>("sourceControl.ignore");
     if (subPaths.some(subPath => findRelativeStatus(subPath)?.status === "ignored")) {
       // Moving into ignored folder - nothing to do.
       return false;
     }
 
-    // TODO: extract separate function - canFolderBeAdded
+    // Folder can be added - let's see if it should be...
+    const relativePathToAdd = missingFolders.join("/");
+    // TODO: taking too long lets other actions run - including the svn delete action... what can we do about that?
+    const shouldAddFolder = await this.shouldAddFolder(relativePathToAdd);
+    if (!shouldAddFolder) {
+      return false;
+    }
+
     try {
-      const relativePathToAdd = missingFolders.join("/");
       const absolutePathToAdd = path.join(this.workspaceRoot, relativePathToAdd);
       const uriToAdd = Uri.file(absolutePathToAdd);
       await this.addFiles([uriToAdd.fsPath], ["--parents", "--depth=empty"]);
@@ -386,9 +391,6 @@ export class Repository implements IRemoteRepository {
       this._logSvnError(error, `Failed to add intermediate folders - skipping rename/move of ${sourceRelativePath}`);
       return false;
     }
-
-    // TODO: check configuration for auto-add (all, just-one, none, prompt)
-    // TODO: add intermediate folders with depth=empty for just-one, simple add for all, return false for none
   }
 
   private async _renameSingleFile(file: {oldUri: Uri; newUri: Uri}): Promise<string> {
@@ -417,6 +419,40 @@ export class Repository implements IRemoteRepository {
         return error;
       }
     );
+  }
+
+  /**
+   * Checks the user settings and queries the user, if necessary, to see if unversioned target 
+   * folder should be added to version control.
+   * @param relativePathToAdd the unversioned target folder
+   * @returns true when the folder should be added 
+   */
+  private async shouldAddFolder(relativePathToAdd: string): Promise<boolean> {
+    // TODO: add setting, define possible values
+    const actionForDeletedFiles = configuration.get<string>(
+      "rename.actionForUnversionedTargetFolders",
+      "prompt"
+    );
+
+    if (actionForDeletedFiles === "No") {
+      return false;
+    }
+
+    // TODO: improve text
+    if (actionForDeletedFiles === "prompt") {
+      const response = await window.showInformationMessage(
+        `Moving files into unversioned folder '${relativePathToAdd}'.\n Would you like to add the folder to version control?`,
+        { modal: false },
+        "Yes",
+        "No"
+      );
+
+      if (response === "No") {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   /**
