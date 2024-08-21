@@ -87,6 +87,7 @@ export class Repository implements IRemoteRepository {
   public needCleanUp: boolean = false;
   private remoteChangedUpdateInterval?: NodeJS.Timer;
   private deletedUris: Uri[] = [];
+  private isRenaming: boolean = false;
   private canSaveAuth: boolean = false;
 
   private lastPromptAuth?: Thenable<IAuth | undefined>;
@@ -304,6 +305,9 @@ export class Repository implements IRemoteRepository {
   }
 
   private async performRename(event: FileRenameEvent) {
+    // This flag prevents the standard deletion logic from running while a rename is in progress
+    this.isRenaming = true;
+
     // Array.filter does not work with async functions, using work-around
     for (const file of event.files) {
       try {
@@ -315,9 +319,15 @@ export class Repository implements IRemoteRepository {
         // The result of the individual renames are not important, logging and potential rollback have already been handled.
       }
     }
+
+    this.isRenaming = false;
+    if (this.deletedUris) {
+      // Deletion action has to be triggered manually to see if any files weren't renamed or moved into unversioned folders
+      this.actionForDeletedFiles();
+    }
   }
 
-  private async _canFileBeRenamed(file: {oldUri: Uri; newUri: Uri}): Promise<boolean> {
+  private async _canFileBeRenamed(file: { oldUri: Uri; newUri: Uri }): Promise<boolean> {
     const svnPattern = /[\\\/](\.svn|_svn)[\\\/]/;
     const isInSvnDirectory = (uri: Uri) => svnPattern.test(uri.path);
     // We don't have to verify the oldUri - .svn is never under version control and therefore statusOldFile won't be "missing"
@@ -329,8 +339,8 @@ export class Repository implements IRemoteRepository {
      * The status of the repository has to be refreshed for each filter operation because otherwise moving multiple files/folders
      * to an unversioned target folder fails.
      */
-    const svnStatuses = await this.repository.getStatus({includeIgnored: true, includeExternals: true, checkRemoteChanges: false});
-    const findStatus = (fileUri: Uri) => svnStatuses.find(iFile => path.join(this.workspaceRoot, iFile.path) === fileUri.fsPath );
+    const svnStatuses = await this.repository.getStatus({ includeIgnored: true, includeExternals: true, checkRemoteChanges: false });
+    const findStatus = (fileUri: Uri) => svnStatuses.find(iFile => path.join(this.workspaceRoot, iFile.path) === fileUri.fsPath);
     const findRelativeStatus = (relativePath: string) => svnStatuses.find(iFile => iFile.path === relativePath);
 
     const statusOldFile = findStatus(file.oldUri);
@@ -374,8 +384,7 @@ export class Repository implements IRemoteRepository {
 
     // Folder can be added - let's see if it should be...
     const relativePathToAdd = missingFolders.join("/");
-    // TODO: taking too long lets other actions run - including the svn delete action... what can we do about that?
-    const shouldAddFolder = await this.shouldAddFolder(relativePathToAdd);
+    const shouldAddFolder = await this.shouldAddFolder(missingFolders[missingFolders.length - 1]);
     if (!shouldAddFolder) {
       return false;
     }
@@ -393,7 +402,7 @@ export class Repository implements IRemoteRepository {
     }
   }
 
-  private async _renameSingleFile(file: {oldUri: Uri; newUri: Uri}): Promise<string> {
+  private async _renameSingleFile(file: { oldUri: Uri; newUri: Uri }): Promise<string> {
     // Prepare the svn rename/move by undoing the VSCode rename/move
     const undoError = this._nonSvnRename(file.newUri, file.oldUri);
     if (undoError) {
@@ -424,24 +433,22 @@ export class Repository implements IRemoteRepository {
   /**
    * Checks the user settings and queries the user, if necessary, to see if unversioned target 
    * folder should be added to version control.
-   * @param relativePathToAdd the unversioned target folder
+   * @param folderToAdd the unversioned target folder
    * @returns true when the folder should be added 
    */
-  private async shouldAddFolder(relativePathToAdd: string): Promise<boolean> {
-    // TODO: add setting, define possible values
-    const actionForDeletedFiles = configuration.get<string>(
-      "rename.actionForUnversionedTargetFolders",
+  private async shouldAddFolder(folderToAdd: string): Promise<boolean> {
+    const actionForFoldersMovedFiles = configuration.get<string>(
+      "rename.actionForFoldersMovedFiles",
       "prompt"
     );
 
-    if (actionForDeletedFiles === "No") {
+    if (actionForFoldersMovedFiles === "none") {
       return false;
     }
 
-    // TODO: improve text
-    if (actionForDeletedFiles === "prompt") {
+    if (actionForFoldersMovedFiles === "prompt") {
       const response = await window.showInformationMessage(
-        `Moving files into unversioned folder '${relativePathToAdd}'.\n Would you like to add the folder to version control?`,
+        `Moving files into unversioned folder '${folderToAdd}'. Would you like to add the folder to version control?`,
         { modal: false },
         "Yes",
         "No"
@@ -517,6 +524,11 @@ export class Repository implements IRemoteRepository {
   @debounce(1000)
   private async actionForDeletedFiles() {
     if (!this.deletedUris.length) {
+      return;
+    }
+
+    if (this.isRenaming) {
+      // Only proceed when rename has been resolved. In case of rename, file status won't be "missing"
       return;
     }
 
