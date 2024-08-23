@@ -129,7 +129,6 @@ export class RepositoryFilesWatcher implements IDisposable {
     if (event === "change") {
       this._onRepoChange.fire(Uri.parse(filename));
     } else if (event === "rename") {
-      // TODO: this needs to be changed, probably
       exists(filename).then(doesExist => {
         if (doesExist) {
           this._onRepoCreate.fire(Uri.parse(filename));
