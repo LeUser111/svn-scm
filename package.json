@@ -1026,6 +1026,16 @@
                     "description": "When a file is deleted, what SVN should do? `none` - Do nothing, `prompt` - Ask the action, `remove` - automatically remove from SVN",
                     "default": "prompt"
                 },
+                "svn.delete.actionForFoldersMovedFiles": {
+                    "type": "string",
+                    "enum": [
+                        "none",
+                        "prompt",
+                        "addFoldersToSVN"
+                    ],
+                    "description": "When a file is moved, how to handle moves into folders not under version control. `none` - Move of file will be treated as delete, `prompt` - Ask the action, `addFoldersToSVN` - automatically adds folders to SVN to perform the move",
+                    "default": "prompt"
+                },
                 "svn.delete.ignoredRulesForDeletedFiles": {
                     "type": "array",
                     "items": {
