@@ -262,15 +262,19 @@ export class Repository implements IRemoteRepository {
       })
     );
 
-    // For each deleted file, append to list
-    this._fsWatcher.onDidWorkspaceDelete(
-      uri => this.deletedUris.push(uri),
+    this._fsWatcher.onDidRename(
+      renameEvent => {
+        // This flag prevents the standard deletion logic from running while a rename is in progress
+        this.isRenaming = true;
+        this.performRename(renameEvent);
+      },
       this,
       this.disposables
     );
 
-    this._fsWatcher.onDidRename(
-      renameEvent => this.performRename(renameEvent),
+    // For each deleted file, append to list
+    this._fsWatcher.onDidWorkspaceDelete(
+      uri => this.deletedUris.push(uri),
       this,
       this.disposables
     );
@@ -304,10 +308,8 @@ export class Repository implements IRemoteRepository {
     );
   }
 
+  @debounce(1000)
   private async performRename(event: FileRenameEvent) {
-    // This flag prevents the standard deletion logic from running while a rename is in progress
-    this.isRenaming = true;
-
     // Array.filter does not work with async functions, using work-around
     for (const file of event.files) {
       try {
@@ -328,68 +330,69 @@ export class Repository implements IRemoteRepository {
   }
 
   private async _canFileBeRenamed(file: { oldUri: Uri; newUri: Uri }): Promise<boolean> {
-    const svnPattern = /[\\\/](\.svn|_svn)[\\\/]/;
-    const isInSvnDirectory = (uri: Uri) => svnPattern.test(uri.path);
-    // We don't have to verify the oldUri - .svn is never under version control and therefore statusOldFile won't be "missing"
-    if (isInSvnDirectory(file.newUri)) {
-      return false;
-    }
-
-    /*
-     * The status of the repository has to be refreshed for each filter operation because otherwise moving multiple files/folders
-     * to an unversioned target folder fails.
-     */
-    const svnStatuses = await this.repository.getStatus({ includeIgnored: true, includeExternals: true, checkRemoteChanges: false });
-    const findStatus = (fileUri: Uri) => svnStatuses.find(iFile => path.join(this.workspaceRoot, iFile.path) === fileUri.fsPath);
-    const findRelativeStatus = (relativePath: string) => svnStatuses.find(iFile => iFile.path === relativePath);
-
-    const statusOldFile = findStatus(file.oldUri);
-    const statusNewFile = findStatus(file.newUri);
-
-    if (statusOldFile?.status !== "missing") {
-      // Old file isn't under version control
-      return false;
-    }
-
-    if (statusNewFile?.status === "unversioned") {
-      // New file is a valid target, rename can take place right away
-      return true;
-    }
-
-    if (!file.newUri.path.startsWith(this.workspaceRoot)) {
-      // The target lies outside of our svn root - we can't add the folder
-      return false;
-    }
-
-    const relativePath = file.newUri.path.replace(this.workspaceRoot + "/", "");
-    const relativePathElements = relativePath.split("/");
-    // The last element is the one we want to move, we don't need to add it
-    const missingFolders = relativePathElements.slice(0, -1);
-
-    if (missingFolders.length === 0) {
-      // This shouldn't happen in practice, but who knows...
-      return false;
-    }
-
-    const subPaths = missingFolders.reduce(
-      (subs, next) => subs.length === 0 ? [next] : [...subs, subs.slice(-1) + "/" + next],
-      [] as string[]
-    );
-
-    // TODO: also needs to handle const ignoreList = configuration.get<string[]>("sourceControl.ignore");
-    if (subPaths.some(subPath => findRelativeStatus(subPath)?.status === "ignored")) {
-      // Moving into ignored folder - nothing to do.
-      return false;
-    }
-
-    // Folder can be added - let's see if it should be...
-    const relativePathToAdd = missingFolders.join("/");
-    const shouldAddFolder = await this.shouldAddFolder(missingFolders[missingFolders.length - 1]);
-    if (!shouldAddFolder) {
-      return false;
-    }
-
     try {
+      const svnPattern = /[\\\/](\.svn|_svn)[\\\/]/;
+      const isInSvnDirectory = (uri: Uri) => svnPattern.test(uri.path);
+      // We don't have to verify the oldUri - .svn is never under version control and therefore statusOldFile won't be "missing"
+      if (isInSvnDirectory(file.newUri)) {
+        return false;
+      }
+
+      /*
+      * The status of the repository has to be refreshed for each filter operation because otherwise moving multiple files/folders
+      * to an unversioned target folder fails.
+      */
+      const svnStatuses = await this.repository.getStatus({ includeIgnored: true, includeExternals: true, checkRemoteChanges: false });
+      const findStatus = (fileUri: Uri) => svnStatuses.find(iFile => path.join(this.workspaceRoot, iFile.path) === fileUri.fsPath);
+      const findRelativeStatus = (relativePath: string) => svnStatuses.find(iFile => iFile.path === relativePath);
+
+      const statusOldFile = findStatus(file.oldUri);
+      const statusNewFile = findStatus(file.newUri);
+
+      if (statusOldFile?.status !== "missing") {
+        // Old file isn't under version control
+        return false;
+      }
+
+      if (statusNewFile?.status === "unversioned") {
+        // New file is a valid target, rename can take place right away
+        return true;
+      }
+
+      if (!file.newUri.path.startsWith(this.workspaceRoot)) {
+        // The target lies outside of our svn root - we can't add the folder
+        return false;
+      }
+
+      const relativePath = file.newUri.path.replace(this.workspaceRoot + "/", "");
+      const relativePathElements = relativePath.split("/");
+      // The last element is the one we want to move, we don't need to add it
+      const missingFolders = relativePathElements.slice(0, -1);
+
+      if (missingFolders.length === 0) {
+        // This shouldn't happen in practice, but who knows...
+        return false;
+      }
+
+      const subPaths = missingFolders.reduce(
+        (subs, next) => subs.length === 0 ? [next] : [...subs, subs.slice(-1) + "/" + next],
+        [] as string[]
+      );
+
+      // TODO: also needs to handle const ignoreList = configuration.get<string[]>("sourceControl.ignore");
+      if (subPaths.some(subPath => findRelativeStatus(subPath)?.status === "ignored")) {
+        // Moving into ignored folder - nothing to do.
+        return false;
+      }
+
+      // Folder can be added - let's see if it should be...
+      const relativePathToAdd = missingFolders.join("/");
+      const shouldAddFolder = await this.shouldAddFolder(missingFolders[missingFolders.length - 1]);
+      if (!shouldAddFolder) {
+        return false;
+      }
+   
+      // Add all missing folders without adding their children
       const absolutePathToAdd = path.join(this.workspaceRoot, relativePathToAdd);
       const uriToAdd = Uri.file(absolutePathToAdd);
       await this.addFiles([uriToAdd.fsPath], ["--parents", "--depth=empty"]);
@@ -438,7 +441,7 @@ export class Repository implements IRemoteRepository {
    */
   private async shouldAddFolder(folderToAdd: string): Promise<boolean> {
     const actionForFoldersMovedFiles = configuration.get<string>(
-      "rename.actionForFoldersMovedFiles",
+      "delete.actionForFoldersMovedFiles",
       "prompt"
     );
 
@@ -482,19 +485,18 @@ export class Repository implements IRemoteRepository {
    * @param message a message to be printed before the error
    */
   private _logSvnError(error: any, message: string) {
-    // TODO: log to SVN extension output or popup box
     if (error instanceof SvnError) {
       window.showErrorMessage(message);
-      console.log(`${message}\n\t${error.message?.trimEnd()}\n\t${error.stderr?.trimEnd()}`);
+      const logString = `${message}\n\t${error.message}\t${error.stderr}`;
+      this.repository.logOutput(logString)
     } else {
       this._logError(error, message);
     }
   }
 
   private _logError(error: any, message: string) {
-    // TODO: log to SVN extension output or popup box
     window.showErrorMessage(message);
-    console.log(`${message}\n\t${error}`);
+    this.repository.logOutput(`${message}\n\t${error}\n`)
   }
 
   @debounce(1000)

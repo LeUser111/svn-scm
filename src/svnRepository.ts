@@ -60,6 +60,14 @@ export class Repository {
     })() as unknown) as Repository;
   }
 
+  /**
+   * Sends the provided message to the output channel of the extension.
+   * @param output to be logged to the output channel
+   */
+  public async logOutput(output: string) {
+    this.svn.logOutput(output);
+  }
+
   public async updateInfo() {
     const result = await this.exec([
       "info",
@@ -470,9 +478,8 @@ export class Repository {
         result.stdout.match(/(Sending|Adding|Deleting)\s+/g) || []
       ).length;
 
-      const filesMessage = `${sendedFiles} ${
-        sendedFiles === 1 ? "file" : "files"
-      } commited`;
+      const filesMessage = `${sendedFiles} ${sendedFiles === 1 ? "file" : "files"
+        } commited`;
 
       return `${filesMessage}: revision ${matches[1]}.`;
     }
