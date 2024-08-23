@@ -342,7 +342,7 @@ export class Repository implements IRemoteRepository {
       * The status of the repository has to be refreshed for each filter operation because otherwise moving multiple files/folders
       * to an unversioned target folder fails.
       */
-      const svnStatuses = await this.repository.getStatus({ includeIgnored: true, includeExternals: true, checkRemoteChanges: false });
+      const svnStatuses = await this.repository.getStatus({ includeIgnored: true, includeExternals: true, checkRemoteChanges: false }, { log: false});
       const findStatus = (fileUri: Uri) => svnStatuses.find(iFile => path.join(this.workspaceRoot, iFile.path) === fileUri.fsPath);
       const findRelativeStatus = (relativePath: string) => svnStatuses.find(iFile => iFile.path === relativePath);
 

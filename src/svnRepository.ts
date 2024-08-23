@@ -114,7 +114,7 @@ export class Repository {
     includeIgnored?: boolean;
     includeExternals?: boolean;
     checkRemoteChanges?: boolean;
-  }): Promise<IFileStatus[]> {
+  }, options?: ICpOptions): Promise<IFileStatus[]> {
     params = Object.assign(
       {},
       {
@@ -137,7 +137,7 @@ export class Repository {
       args.push("--show-updates");
     }
 
-    const result = await this.exec(args);
+    const result = await this.exec(args, options);
 
     const status: IFileStatus[] = await parseStatusXml(result.stdout);
 
