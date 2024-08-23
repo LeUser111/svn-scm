@@ -324,9 +324,11 @@ export class Repository implements IRemoteRepository {
 
     this.isRenaming = false;
     if (this.deletedUris) {
-      // Deletion action has to be triggered manually to see if any files weren't renamed or moved into unversioned folders
+      // Deletion action has to be triggered manually to see if any files weren't renamed or moved into unversioned folders.
+      // Deletion only works when each file in this.deletedUris is also in this.changes. Changes are updated with updateModelState.
+      await this.updateModelState();
       this.actionForDeletedFiles();
-    }
+    } 
   }
 
   private async _canFileBeRenamed(file: { oldUri: Uri; newUri: Uri }): Promise<boolean> {
