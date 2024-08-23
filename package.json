@@ -316,11 +316,6 @@
                 "category": "SVN"
             },
             {
-                "command": "svn.renameExplorer",
-                "title": "Rename with SVN",
-                "category": "SVN"
-            },
-            {
                 "command": "svn.repolog.addrepolike",
                 "category": "SVN",
                 "title": "Add repo-like path",
@@ -564,10 +559,6 @@
                 {
                     "command": "svn.removeUnversioned",
                     "when": "config.svn.enabled && svnOpenRepositoryCount != 0 && isSvn19orGreater"
-                },
-                {
-                    "command": "svn.renameExplorer",
-                    "when": "false"
                 },
                 {
                     "command": "svn.repolog.addrepolike",
@@ -962,11 +953,6 @@
                     "command": "svn.addToIgnoreExplorer",
                     "group": "9_svn",
                     "when": "config.svn.enabled && svnOpenRepositoryCount != 0"
-                },
-                {
-                    "command": "svn.renameExplorer",
-                    "group": "7_modification",
-                    "when": "config.svn.enabled && svnOpenRepositoryCount != 0 && explorerViewletVisible && filesExplorerFocus && !explorerResourceIsRoot && !inputFocus"
                 },
                 {
                     "command": "svn.changelist",

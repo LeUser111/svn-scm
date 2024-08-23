@@ -31,7 +31,6 @@ import { Refresh } from "./commands/refresh";
 import { RefreshRemoteChanges } from "./commands/refreshRemoteChanges";
 import { Remove } from "./commands/remove";
 import { RemoveUnversioned } from "./commands/removeUnversioned";
-import { RenameExplorer } from "./commands/renameExplorer";
 import { Resolve } from "./commands/resolve";
 import { ResolveAll } from "./commands/resolveAll";
 import { Resolved } from "./commands/resolved";
@@ -83,7 +82,6 @@ export function registerCommands(
   disposables.push(new FinishCheckout());
   disposables.push(new AddToIgnoreSCM());
   disposables.push(new AddToIgnoreExplorer());
-  disposables.push(new RenameExplorer());
   disposables.push(new Upgrade());
   disposables.push(new OpenChangePrev());
   disposables.push(new PromptRemove());
