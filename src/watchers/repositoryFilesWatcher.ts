@@ -83,7 +83,6 @@ export class RepositoryFilesWatcher implements IDisposable {
     this.onDidCreate = filterEvent(fsWatcher.onDidCreate, isRelevant);
     this.onDidDelete = filterEvent(fsWatcher.onDidDelete, isRelevant);
 
-    // TODO: ignoreSvn? Needed when files inside .svn are renamed
     this.onDidRename = workspace.onDidRenameFiles;
 
     this.onDidAny = anyEvent(
