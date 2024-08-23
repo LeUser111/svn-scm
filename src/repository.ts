@@ -338,6 +338,16 @@ export class Repository implements IRemoteRepository {
         return false;
       }
 
+      const relativePath = file.newUri.path.replace(this.workspaceRoot + path.sep, "");
+
+      const ignoreList = configuration.get<string[]>("sourceControl.ignore");
+      const isToBeIgnored = (relPath: string) => matchAll(path.sep + relPath, ignoreList, { dot: true, matchBase: true });
+
+      if(isToBeIgnored(relativePath)){
+        // Target is a file that should be ignored - specified via extension setting
+        return false;
+      }
+
       /*
       * The status of the repository has to be refreshed for each filter operation because otherwise moving multiple files/folders
       * to an unversioned target folder fails.
@@ -364,8 +374,7 @@ export class Repository implements IRemoteRepository {
         return false;
       }
 
-      const relativePath = file.newUri.path.replace(this.workspaceRoot + "/", "");
-      const relativePathElements = relativePath.split("/");
+      const relativePathElements = relativePath.split(path.sep);
       // The last element is the one we want to move, we don't need to add it
       const missingFolders = relativePathElements.slice(0, -1);
 
@@ -375,18 +384,17 @@ export class Repository implements IRemoteRepository {
       }
 
       const subPaths = missingFolders.reduce(
-        (subs, next) => subs.length === 0 ? [next] : [...subs, subs.slice(-1) + "/" + next],
+        (subs, next) => subs.length === 0 ? [next] : [...subs, subs.slice(-1) + path.sep + next],
         [] as string[]
       );
 
-      // TODO: also needs to handle const ignoreList = configuration.get<string[]>("sourceControl.ignore");
-      if (subPaths.some(subPath => findRelativeStatus(subPath)?.status === "ignored")) {
+      if (subPaths.some(subPath => findRelativeStatus(subPath)?.status === "ignored" || isToBeIgnored(subPath))) {
         // Moving into ignored folder - nothing to do.
         return false;
       }
 
       // Folder can be added - let's see if it should be...
-      const relativePathToAdd = missingFolders.join("/");
+      const relativePathToAdd = missingFolders.join(path.sep);
       const shouldAddFolder = await this.shouldAddFolder(missingFolders[missingFolders.length - 1]);
       if (!shouldAddFolder) {
         return false;
@@ -399,7 +407,7 @@ export class Repository implements IRemoteRepository {
 
       return true;
     } catch (error) {
-      const sourceRelativePath = file.oldUri.path.replace(this.workspaceRoot + "/", "");
+      const sourceRelativePath = file.oldUri.path.replace(this.workspaceRoot + path.sep, "");
       this._logSvnError(error, `Failed to add intermediate folders - skipping rename/move of ${sourceRelativePath}`);
       return false;
     }
