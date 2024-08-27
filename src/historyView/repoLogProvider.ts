@@ -260,6 +260,24 @@ export class RepoLogProvider
       .remoteFullPath;
     let prevRev: ISvnLogEntry;
 
+    // TODO: if removed, open previous version
+
+    if(commit.kind !== "file") {
+      window.showInformationMessage("Selected element is not a file!");
+      return;
+    }
+
+    if(commit.action === "A") {
+      // There is no previous commit, let's try to open the file directly
+      // TODO: does not work when files has been removed in the mean time
+      return openFileRemote(item.repo, remotePath, parent.revision);
+    }
+
+    if(commit.action === "D") {
+      // There is only the previous commit, let's try to open that
+
+    }
+
     const revs = await item.repo.log(parent.revision, "1", 2, remotePath);
 
     if (revs.length === 2) {
