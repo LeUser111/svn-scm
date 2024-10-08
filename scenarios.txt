@@ -33,3 +33,8 @@ NOT Working yet:
 TODO:
 
     commits across multiple projects (e.g. in diff explorer)
+
+README build:
+
+npm install -g @vscode/vsce
+npx vsce package -o svn-scm-ovsx.vsix
