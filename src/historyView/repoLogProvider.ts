@@ -268,12 +268,14 @@ export class RepoLogProvider
     if(commit.action === "A") {
       // There is no previous commit, let's try to open the file directly
       // TODO: does not work when files has been removed in the mean time
-      return openFileRemote(item.repo, remotePath, parent.revision);
+      return openFileRemote(item.repo, remotePath, parent.revision, true);
     }
 
     if(commit.action === "D") {
       // There is only the previous commit, let's try to open that
       // TODO: if removed, open previous version
+      const previousRevision = Number(parent.revision) - 1;
+      return openFileRemote(item.repo, remotePath, previousRevision.toString(), true);
     }
 
     const revs = await item.repo.log(parent.revision, "1", 2, remotePath);

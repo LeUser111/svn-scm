@@ -299,11 +299,12 @@ export async function openDiff(
 export async function openFileRemote(
   repo: IRemoteRepository,
   arg: Uri,
-  against: string
+  against: string,
+  useRepoRevision?: boolean
 ) {
   let out;
   try {
-    out = await repo.show(arg, against);
+    out = await repo.show(arg, against, useRepoRevision);
   } catch {
     window.showErrorMessage("Failed to open path");
     return;

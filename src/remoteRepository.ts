@@ -16,7 +16,14 @@ export interface IRemoteRepository {
     target?: string | Uri
   ): Promise<ISvnLogEntry[]>;
 
-  show(filePath: string | Uri, revision?: string): Promise<string>;
+  /**
+   * Executes "svn cat" of the specified file. 
+   * @param filePath of the file to be displayed
+   * @param revision the revision of the file to be displayed
+   * @param useRepoRevision when true, the revision will be used as repository revision, 
+   *  required when filePath does not exist in current repository revision
+   */
+  show(filePath: string | Uri, revision?: string, useRepoRevision?: boolean): Promise<string>;
 }
 
 export class RemoteRepository implements IRemoteRepository {
@@ -49,8 +56,9 @@ export class RemoteRepository implements IRemoteRepository {
 
   public async show(
     filePath: string | Uri,
-    revision?: string
+    revision?: string,
+    useRepoRevision?: boolean
   ): Promise<string> {
-    return this.repo.show(filePath, revision);
+    return this.repo.show(filePath, revision, useRepoRevision);
   }
 }

@@ -288,7 +288,14 @@ export class Repository {
     return changes;
   }
 
-  public async show(file: string | Uri, revision?: string): Promise<string> {
+ /**
+   * Executes "svn cat" of the specified file. 
+   * @param file of the file to be displayed
+   * @param revision the revision of the file to be displayed
+   * @param useRepoRevision when true, the revision will be used as repository revision, 
+   *  required when filePath does not exist in current repository revision
+   */   
+  public async show(file: string | Uri, revision?: string, useRepoRevision?: boolean): Promise<string> {
     const args = ["cat"];
 
     let uri: Uri;
@@ -311,7 +318,7 @@ export class Repository {
       target = this.removeAbsolutePath(target);
     }
 
-    if (revision) {
+    if (revision && !useRepoRevision) {
       args.push("-r", revision);
       if (
         isChild &&
@@ -321,6 +328,10 @@ export class Repository {
         target = info.url + "/" + target.replace(/\\/g, "/");
         // TODO move to SvnRI
       }
+    }
+
+    if(revision && useRepoRevision) {
+      target = `${target}@${revision}`;
     }
 
     args.push(target);

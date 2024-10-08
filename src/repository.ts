@@ -986,10 +986,11 @@ export class Repository implements IRemoteRepository {
 
   public async show(
     filePath: string | Uri,
-    revision?: string
+    revision?: string,
+    useRepoRevision?: boolean
   ): Promise<string> {
     return this.run<string>(Operation.Show, () => {
-      return this.repository.show(filePath, revision);
+      return this.repository.show(filePath, revision, useRepoRevision);
     });
   }
 
