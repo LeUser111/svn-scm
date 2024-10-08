@@ -405,7 +405,7 @@ export class Repository implements IRemoteRepository {
       // Add all missing folders without adding their children
       const absolutePathToAdd = path.join(this.workspaceRoot, relativePathToAdd);
       const uriToAdd = Uri.file(absolutePathToAdd);
-      await this.addFiles([uriToAdd.fsPath], ["--parents", "--depth=empty"]);
+      await this.addWithoutIgnore([uriToAdd.fsPath], ["--parents", "--depth=empty"]);
 
       return true;
     } catch (error) {
@@ -1002,8 +1002,12 @@ export class Repository implements IRemoteRepository {
     });
   }
 
-  public async addFiles(files: string[], options: string[] = []) {
-    return this.run(Operation.Add, () => this.repository.addFiles(files, options));
+  public async addFiles(files: string[]) {
+    return this.run(Operation.Add, () => this.repository.addFiles(files));
+  }
+
+  private async addWithoutIgnore(files: string[], options: string[]) {
+    return this.run(Operation.Add, () => this.repository.addWithoutIgnore(files, options));
   }
 
   public async addChangelist(files: string[], changelist: string) {

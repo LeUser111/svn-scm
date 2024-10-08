@@ -487,7 +487,7 @@ export class Repository {
     return result.stdout;
   }
 
-  public async addFilesByIgnore(files: string[], ignoreList: string[]) {
+  public async addFilesByIgnore(files: string[], ignoreList: string[]): Promise<IExecutionResult> {
     const allFiles = async (file: string): Promise<string[]> => {
       if ((await stat(file)).isDirectory()) {
         return (
@@ -515,21 +515,35 @@ export class Repository {
     return this.exec(["add", "--depth=empty", ...files]);
   }
 
-  public addFiles(files: string[], options: string[] = []) {
+  public addFiles(files: string[]): Promise<IExecutionResult> {
     const ignoreList = configuration.get<string[]>("sourceControl.ignore");
     if (ignoreList.length > 0) {
       return this.addFilesByIgnore(files, ignoreList);
     }
-    files = files.map(file => this.removeAbsolutePath(file));
-    return this.exec(["add", ...options, ...files]);
+
+    const relativePathFiles = files      
+      .map(file => this.removeAbsolutePath(file));
+
+    return this.exec(["add", ...relativePathFiles]);
   }
 
-  public addChangelist(files: string[], changelist: string) {
+  /**
+   * Add the specified files without verifying the extension's ignore list.
+   * @param files to be added
+   * @param options to be used, e.g. ["--parents", "--depth=empty"]
+   * @returns the execution result
+   */
+  public addWithoutIgnore(files: string[], options: string[]): Promise<IExecutionResult> {
+    const relativePathFiles = files.map(file => this.removeAbsolutePath(file));
+    return this.exec(["add", ...options, ...relativePathFiles]);
+  }
+
+  public addChangelist(files: string[], changelist: string): Promise<IExecutionResult> {
     files = files.map(file => this.removeAbsolutePath(file));
     return this.exec(["changelist", changelist, ...files]);
   }
 
-  public removeChangelist(files: string[]) {
+  public removeChangelist(files: string[]): Promise<IExecutionResult> {
     files = files.map(file => this.removeAbsolutePath(file));
     return this.exec(["changelist", "--remove", ...files]);
   }
